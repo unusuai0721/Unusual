@@ -1,0 +1,2 @@
+export const REMINDER="本轮请继续遵守前文基础人设的语气和回复习惯；优先落实当前对象已确认的称呼约定，不把旧回复当作新规则。";
+export function personaInjection(persona,reinforce=false){const mode=persona.injectionMode||'legacy',text=String(persona.prompt||'');const dual=mode==='double'||(mode==='legacy'&&reinforce);const tailOnly=mode==='tail';const front=tailOnly?'':text;const tail=mode==='reminder'?REMINDER:(dual||tailOnly?'本轮回复继续遵守完整基础人设；可塑性记忆中的具体约定仍按上文执行：\n'+text:'');return {front,tail,copies:dual?2:1,reminderBytes:mode==='reminder'?Buffer.byteLength(REMINDER):0};}

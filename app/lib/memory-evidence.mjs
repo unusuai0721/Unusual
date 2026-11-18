@@ -1,0 +1,1 @@
+export function evidence(source={},quote='',method='model'){return {senderId:String(source.senderId||''),senderName:String(source.senderName||''),scope:String(source.groupId||source.scope||''),scopeName:String(source.scopeName||''),messageId:String(source.messageId||''),at:source.at||null,quote:String(quote||source.content||'').slice(0,2000),method};}

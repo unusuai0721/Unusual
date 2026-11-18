@@ -1,0 +1,16 @@
+/data/
+/artifacts/
+/backups/
+/dist/
+/runtime/
+/desktop/runtime/
+/bridge/
+/app/resources/memewiki.json.gz
+/tests/.tmp/
+*.sqlite*
+*.log
+*.exe
+*.dll
+.env*
+*.pem
+*.key

@@ -1,0 +1,14 @@
+{
+  "name": "unusual-local-qq",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Portable local QQ chat companion with no model computer tools",
+  "scripts": {
+    "start": "node app/server.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}
