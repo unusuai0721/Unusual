@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('qiliaoDesktop', Object.freeze({
   updateStatus: () => ipcRenderer.invoke('update:status'),
   applyUpdate: () => ipcRenderer.invoke('update:apply'),
   showUpdate: () => ipcRenderer.invoke('update:folder'),
+  importBundledQQ: () => ipcRenderer.invoke('qq:import-bundled'),
   importNapCat: file => ipcRenderer.invoke('qq:import',webUtils.getPathForFile(file)),
   startQQ: () => ipcRenderer.invoke('qq:start'),
   unbindQQ: () => ipcRenderer.invoke('qq:unbind'),

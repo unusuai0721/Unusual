@@ -5,6 +5,7 @@ import {inflateRawSync} from 'node:zlib';
 
 const digest='496dcd97b4193e6c2aaee9ffacfff4b9ec45a67f43d524ce4fd9efed85bdb16b';
 const key='emoji.bundle.'+digest;
+export function bundleAvailable(store){return fs.existsSync(store.paths.resolve('app/resources/emoji-starter.zip'));}
 export function bundleEnabled(store){return store.getMeta(key,false)===true;}
 
 // Only the fixed, checksummed release archive is accepted. Its local headers

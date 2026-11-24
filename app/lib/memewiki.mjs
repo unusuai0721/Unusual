@@ -11,17 +11,30 @@ const like=q=>q.replace(/[!%_]/g,'!$&');
 export class MemeWiki{
  constructor(store){
   this.store=store;store.db.exec('CREATE TABLE IF NOT EXISTS meme_entries(title TEXT PRIMARY KEY,slug TEXT,tags TEXT,usage TEXT,origin TEXT,other TEXT,summary TEXT,aliases TEXT)');
-  if(!store.getMeta('memewiki:seed')){const file=store.paths.resolve('app/resources/memewiki.json.gz');if(fs.existsSync(file)){
-   const seed=JSON.parse(gunzipSync(fs.readFileSync(file),{maxOutputLength:50*1024*1024}));if(seed.rows.length!==6668)throw bad('内置梗库条数校验失败');
-   store.db.exec('BEGIN IMMEDIATE');try{const stmt=store.prepare('INSERT OR IGNORE INTO meme_entries('+fields.join(',')+') VALUES(?,?,?,?,?,?,?,?)');for(const r of seed.rows)stmt.run(...fields.map(k=>r[k]??''));store.setMeta('memewiki:seed',{...seed,rows:undefined,count:seed.rows.length});store.db.exec('COMMIT');}catch(e){store.db.exec('ROLLBACK');throw e;}
-  }}
+  this.importSeed('memewiki:seed','memewiki.json.gz', seed=>seed.rows?.length===6668);
+  this.importSeed('memewiki:open-seed','open-memes.json.gz', seed=>seed.source==='chinese-meme-dict'&&seed.rows?.length>10000);
+ }
+ importSeed(key,name,valid){
+  const {store}=this;
+  if(store.getMeta(key))return;
+  const file=store.paths.resolve('app/resources/'+name);
+  if(!fs.existsSync(file))return;
+  const seed=JSON.parse(gunzipSync(fs.readFileSync(file),{maxOutputLength:50*1024*1024}));
+  if(!valid(seed))throw bad('内置梗库条数校验失败');
+  store.db.exec('BEGIN IMMEDIATE');
+  try{
+   const stmt=store.prepare('INSERT OR IGNORE INTO meme_entries('+fields.join(',')+') VALUES(?,?,?,?,?,?,?,?)');
+   for(const row of seed.rows)stmt.run(...fields.map(key=>row[key]??''));
+   store.setMeta(key,{version:seed.version,source:seed.source,count:seed.rows.length});
+   store.db.exec('COMMIT');
+  }catch(error){store.db.exec('ROLLBACK');throw error;}
  }
  hasEntries(){return !!this.store.prepare('SELECT 1 FROM meme_entries LIMIT 1').get();}
  config(){return {...defaults,...this.store.getMeta('memewiki:config',{})};}
  revision(){return this.store.getMeta('memewiki:revision',0);}
  changed(){this.store.setMeta('memewiki:revision',this.revision()+1);}
  configure(patch){const c=this.config();for(const key of ['enabled','autoThink','modelLookup','roastEnabled'])if(key in patch){if(typeof patch[key]!=='boolean')throw bad('开关必须为布尔值');c[key]=patch[key];}for(const [key,min,max] of [['roastLevel',0,100],['maxBytes',400,6000]])if(key in patch){if(!Number.isInteger(patch[key])||patch[key]<min||patch[key]>max)throw bad('设置数值超出范围');c[key]=patch[key];}this.store.setMeta('memewiki:config',c);this.changed();return this.state();}
- state(){return {config:this.config(),total:this.store.prepare('SELECT COUNT(*) n FROM meme_entries').get().n,seed:this.store.getMeta('memewiki:seed'),revision:this.revision()};}
+ state(){return {config:this.config(),total:this.store.prepare('SELECT COUNT(*) n FROM meme_entries').get().n,seed:this.store.getMeta('memewiki:seed'),openSeed:this.store.getMeta('memewiki:open-seed'),revision:this.revision()};}
  get(title){return this.store.prepare('SELECT * FROM meme_entries WHERE title=?').get(String(title||''))||null;}
  list({q='',offset=0,limit=40}={}){q=String(q).trim().slice(0,200);offset=Number(offset);limit=Number(limit);if(!Number.isSafeInteger(offset)||offset<0||!Number.isInteger(limit)||limit<1||limit>120)throw bad('分页参数无效');const where=q?" WHERE title LIKE ? ESCAPE '!' OR tags LIKE ? ESCAPE '!' OR summary LIKE ? ESCAPE '!' OR aliases LIKE ? ESCAPE '!' OR slug LIKE ? ESCAPE '!'":'';const args=q?Array(5).fill('%'+like(q)+'%'):[];return {total:this.store.prepare('SELECT COUNT(*) n FROM meme_entries'+where).get(...args).n,items:this.store.prepare('SELECT title,tags,substr(summary,1,180) summary,aliases FROM meme_entries'+where+' ORDER BY title LIMIT ? OFFSET ?').all(...args,limit,offset),offset,limit};}
  save(data){const title=String(data.title||'').trim();if(!title||title.length>120)throw bad('梗名需要1到120字');const old=this.get(title);if(data.isNew&&old)throw bad('已有同名词条，请编辑原词条',409);if(!data.isNew&&!old)throw bad('词条不存在',404);const row={};for(const key of fields){row[key]=key==='title'?title:String(data[key]??old?.[key]??'');if(row[key].length>(key==='usage'||key==='origin'||key==='summary'||key==='other'?20000:2000))throw bad('词条字段过长');}row.aliases=row.aliases.split(/[,，\n]/).map(x=>x.trim()).filter(Boolean).join(',');this.store.prepare('INSERT OR REPLACE INTO meme_entries('+fields.join(',')+') VALUES(?,?,?,?,?,?,?,?)').run(...fields.map(k=>row[k]));this.changed();return row;}

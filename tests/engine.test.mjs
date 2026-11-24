@@ -785,7 +785,7 @@ test('100% group replies to other people are limited to light reactions without 
     c.voice.enabled=true;
     c.groups[0].voiceMode='always';
     c.groups[0].reactionStyle='allow';
-    c.groups[0].replyProbability=1;
+    c.groups[0].turnCheckEnabled=true;c.groups[0].replyProbability=1;
   });
   const member={groupId:'123',source:'qq',role:'user',status:'received',senderId:'888',senderName:'桃子',messageId:'98',content:'有人吗'};
   f.store.addMessage(member);
@@ -807,7 +807,7 @@ test('100% group replies to other people are limited to light reactions without 
   assert.equal(f.calls.send.length,3);
 });
 test('a real at or quote cannot be downgraded by an old model decision marker',async t=>{
-  const f=fixture(t,c=>{c.groups[0].replyProbability=1;c.groups[0].autoEmoji=false;});
+  const f=fixture(t,c=>{c.groups[0].turnCheckEnabled=true;c.groups[0].replyProbability=1;c.groups[0].autoEmoji=false;});
   f.adapters.generate=async(p,input)=>{
     f.calls.generate.push(input);
     return {text:'[群聊:轻回应]\n还没睡',inputTokens:10,outputTokens:6};
@@ -827,7 +827,7 @@ test('a real at or quote cannot be downgraded by an old model decision marker',a
 });
 
 test('a member can ask a follow-up after the bot mentions them; unrelated chat does not take over',async t=>{
-  const f=fixture(t,c=>{c.groups[0].replyProbability=1;c.groups[0].autoEmoji=false;});
+  const f=fixture(t,c=>{c.groups[0].turnCheckEnabled=true;c.groups[0].replyProbability=1;c.groups[0].autoEmoji=false;});
   f.store.addMessage({groupId:'123',source:'qq',role:'user',status:'received',senderId:'777',senderName:'群友',content:'昨天打游戏',messageId:'98'});
   f.adapters.generate=async(p,input)=>{
     f.calls.generate.push(input);
@@ -852,7 +852,7 @@ test('a member can ask a follow-up after the bot mentions them; unrelated chat d
   assert.ok(f.calls.generate[1].messages.some(m=>m.content.includes('此前你明确对当前发言者')));
 });
 test('context determines target and whether to reply without requiring at, quote or a pronoun',async t=>{
-  const f=fixture(t,c=>{c.groups[0].replyProbability=1;c.groups[0].autoEmoji=false;});
+  const f=fixture(t,c=>{c.groups[0].turnCheckEnabled=true;c.groups[0].replyProbability=1;c.groups[0].autoEmoji=false;});
   f.store.addMessage({groupId:'123',source:'qq',role:'assistant',status:'sent',senderId:'900',messageId:'91',content:'试试周六九点，地铁还开着'});
   let response='[对象:自己][回应:正文]\n末班是十点半。';
   f.adapters.generate=async(p,input)=>{
@@ -886,7 +886,7 @@ test('explicit style preference is learned with evidence even without triggering
 test('private relay collects group member and body across separate user messages',async t=>{const f=privateFixture(t);const base=f.adapters.onebotCall;f.adapters.onebotCall=async(c,a,p)=>a==='get_group_member_list'?[{user_id:456,nickname:'小桃'}]:base(c,a,p);await f.engine.receive(friendEvent('去测试群那个群@小桃','rp1'));await settle(f.engine);await f.engine.receive(friendEvent('123','rp2'));await settle(f.engine);await f.engine.receive(friendEvent('说你好','rp3'));await settle(f.engine);assert.equal(f.calls.generate.length,0);assert.ok(f.calls.send.some(c=>c.action==='send_group_msg'&&c.params.group_id==='123'&&c.params.message.some(m=>m.type==='text'&&m.data.text==='你好')));});
 
 test('vocative keyword and uninterrupted performance request both get normal replies',async t=>{
-  const f=fixture(t,c=>Object.assign(c.groups[0],{replyProbability:1,keywords:['大肥鱼'],autoEmoji:false}));
+  const f=fixture(t,c=>Object.assign(c.groups[0],{turnCheckEnabled:true,replyProbability:1,keywords:['大肥鱼'],autoEmoji:false}));
   await f.engine.receive(event('大肥鱼出来','call'));await settle(f.engine);
   await f.engine.receive(event('表演个才艺','request'));await settle(f.engine);
   assert.equal(f.calls.send.length,2);

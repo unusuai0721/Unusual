@@ -34,6 +34,7 @@ async function body(req, max = 8 * 1024 * 1024) {
 const jsonBody = raw => { try { const value = JSON.parse(raw.toString('utf8')); if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(); return value; } catch { throw error(400, '请求必须为 JSON 对象'); } };
 
 import {bundleEnabled,importBundle} from './lib/bundled-emoji.mjs';
+import {starterOffers,chooseStarterOffer} from './lib/starter-offers.mjs';
 import {Moments} from './lib/moments.mjs';
 export async function createApp({ root = ROOT, port = 3210, adapterOverrides, officialOptions, startEngine = true } = {}) {
   applyPendingRestore(root);
@@ -215,6 +216,12 @@ export async function createApp({ root = ROOT, port = 3210, adapterOverrides, of
       if (route === '/api/send' && method === 'POST') return respond(res, 200, await engine.manualSend(jsonBody(await body(req, 50000))));
       if (route === '/api/proactive' && method === 'POST') return respond(res, 200, await engine.proactive(jsonBody(await body(req, 4096)).groupId));
       if (route === '/api/logs' && method === 'GET') return respond(res, 200, { items: store.logs() });
+      if(route==='/api/starter-offers'&&method==='GET')return respond(res,200,starterOffers(store));
+      if(route==='/api/starter-offers'&&method==='POST'){
+        const {kind,choice}=jsonBody(await body(req,4096));
+        const result=chooseStarterOffer(store,media,kind,choice);
+        return respond(res,200,{...result,offers:starterOffers(store),...(kind==='personas'&&choice==='import'?{config:store.config}:{})});
+      }
       if(route==='/api/emoji/bundle' && method==='POST') return respond(res,200,importBundle(store,media));
       if (route === '/api/emoji' && method === 'GET') return respond(res, 200, { items: media.listEmoji(),bundleEnabled:bundleEnabled(store) });
       if (route === '/api/emoji' && method === 'POST') return respond(res, 201, media.upload(jsonBody(await body(req))));

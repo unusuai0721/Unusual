@@ -94,7 +94,8 @@ internal static class Installer {
                 Directory.CreateDirectory(Path.GetDirectoryName(dest));entry.ExtractToFile(dest);names.Add(name);
             }
         }
-        if(!names.Contains("Unusual.exe")||!names.Contains("app/server.mjs")||!names.Contains("app/resources/emoji-starter.zip"))
+        if(!names.Contains("Unusual.exe")||!names.Contains("app/server.mjs")||!names.Contains("app/resources/emoji-starter.zip")||
+           !names.Contains("app/resources/starter-personas.json")||!names.Contains("app/resources/open-memes.json.gz")||!names.Contains("app/resources/nap.zip"))
             throw new IOException("安装包不完整");
         VersionOf(dir);return names;
     }

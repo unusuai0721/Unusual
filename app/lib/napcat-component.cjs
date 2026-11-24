@@ -58,9 +58,9 @@ function createComponent({own,dir,fetchImpl}){
   function installed(){return fs.existsSync(own(REL+'/.installed'))&&fs.existsSync(own(REL+'/node.exe'));}
   async function install(selected){
     if(busy)throw Error('组件正在导入');
-    if(typeof selected!=='string'||!path.isAbsolute(selected)||path.extname(selected).toLowerCase()!=='.zip')throw Error('请选择 NapCat 组件 ZIP');
+    if(typeof selected!=='string'||!path.isAbsolute(selected)||path.extname(selected).toLowerCase()!=='.zip')throw Error('请选择 nap.zip');
     const stat=await fs.promises.stat(selected);
-    if(!stat.isFile()||stat.size>MAX)throw Error('文件不是支持的 NapCat 组件 ZIP');
+    if(!stat.isFile()||stat.size>MAX)throw Error('请选择受支持的 QQ 组件 ZIP');
     busy=true;progress='正在校验组件';
     let work;
     try{
@@ -68,7 +68,7 @@ function createComponent({own,dir,fetchImpl}){
       const input=path.join(work,'input.zip'),full=path.join(work,'runtime.zip'),stage=path.join(work,'ready');
       await fs.promises.copyFile(selected,input,fs.constants.COPYFILE_EXCL);
       const hash=await digest(input);
-      if(hash!==CORE&&hash!==FULL)throw Error('组件校验不匹配，请下载 Unusual 发布页上的 NapCat v4.18.42 组件 ZIP');
+      if(hash!==CORE&&hash!==FULL)throw Error('组件校验不匹配，请选择软件自带的 nap.zip');
       if(installed())return;
       await fs.promises.mkdir(stage);
       if(hash===CORE){

@@ -1,7 +1,7 @@
 
 export function usesLightReactions(group) {
   return !!group && !String(group.id).startsWith('private:') &&
-    (group.turnCheckEnabled ?? ((group.replyMode||'smart')==='smart' && Number(group.replyProbability)>=1));
+    (group.turnCheckEnabled ?? false);
 }
 
 const addressText=value=>String(value||'').normalize('NFKC').replace(/\s/g,'').toLowerCase();

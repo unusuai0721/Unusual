@@ -18,7 +18,7 @@ New-Item -ItemType Directory -Path $stage -Force | Out-Null
 $csc=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 try {
-    foreach($file in @('app\server.mjs','app\lib','app\public','app\resources\emoji-starter.zip','desktop\main.cjs','desktop\preload.cjs','desktop\icon.ico','desktop\package.json','scripts\launch.ps1','scripts\stop.ps1','scripts\import-memes.mjs','licenses','docs\screenshots','Start.cmd','Stop.cmd','README.md','CHANGELOG.md','LICENSE','THIRD-PARTY.md','package.json')){
+    foreach($file in @('app\server.mjs','app\lib','app\public','app\resources\emoji-starter.zip','app\resources\starter-personas.json','app\resources\open-memes.json.gz','app\resources\nap.zip','desktop\main.cjs','desktop\preload.cjs','desktop\icon.ico','desktop\package.json','scripts\launch.ps1','scripts\stop.ps1','scripts\import-memes.mjs','licenses','docs\screenshots','Start.cmd','Stop.cmd','README.md','CHANGELOG.md','LICENSE','THIRD-PARTY.md','package.json')){
         $dest=Join-Path $stage $file
         New-Item -ItemType Directory -Path (Split-Path -Parent $dest) -Force | Out-Null
         Copy-Item -LiteralPath (Join-Path $source $file) -Destination $dest -Recurse
@@ -39,7 +39,7 @@ try {
     Copy-Item -LiteralPath $payload -Destination $zip
     & $csc /nologo /codepage:65001 /target:winexe /platform:x64 /reference:System.Web.Extensions.dll /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll "/resource:$payload,unusual-payload.zip" "/win32icon:$icon" "/out:$setup" (Join-Path $source 'desktop\installer.cs')
     if($LASTEXITCODE -ne 0){throw 'Installer compilation failed'}
-    $checks = foreach ($asset in (@($zip,$setup) + @(Get-ChildItem -LiteralPath $out -Filter 'Unusual-NapCat-4.18.42-Windows-x64.zip' -File | Select-Object -ExpandProperty FullName))) {
+    $checks = foreach ($asset in @($zip,$setup)) {
         $hash=(Get-FileHash -LiteralPath $asset -Algorithm SHA256).Hash.ToLowerInvariant()
         "$hash  $([IO.Path]::GetFileName($asset))"
     }
