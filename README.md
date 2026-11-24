@@ -54,7 +54,13 @@ Unusual 是一个在 Windows 上运行的 QQ 聊天助手。它可按会话接�
 - 升级只替换发行包清单中的程序文件。人设、密钥、群与好友设置、聊天记录、记忆、个人表情、主题以及本机备份均留在原处。安装失败会回退已替换的文件。
 - 外部 OneBot 的扫码登录由桥接器保存。升级期间可保持桥接器运行；官方机器人会用已保存的 AppID 和 AppSecret 重新连接。QQ 平台若要求重新验证、或密钥被撤销，仍需按平台提示处理。
 
-### OneBot v11
+### 个人 QQ 扫码登录（Windows x64）
+
+1. 从 [v1.0.2 发布页](https://github.com/unusuai0721/Unusual/releases/tag/v1.0.2) 同时下载 Unusual 和 **Unusual-NapCat-4.18.42-Windows-x64.zip**。
+2. 打开「快速开始 → 连接 QQ」，将组件 ZIP 原样拖入虚线框，也可以点「选择 ZIP」。Unusual 会校验压缩包，首次联网下载并校验约 118 MB 的 Windows 运行文件，再自动启动 NapCat。使用手机 QQ 扫描窗口中的二维码，确认登录后点「选择聊天的群」。
+3. 已有相同版本完整 `NapCat.Shell.Windows.Node.zip` 的用户可以直接拖入进行离线安装。已安装的组件位于应用的 `components/`，登录资料在 `data/`。应用更新保留两者。断开会保留登录，解绑会清除本软件的账号登录资料。
+
+### 已有外部 OneBot v11
 
 在你另行安装的 OneBot 桥接器中完成账号登录。HTTP 服务可只监听本机，例如 `http://127.0.0.1:3000`。把地址及访问令牌填进 Unusual「快速开始」。在桥接器中新建 HTTP 事件上报，目标为 `http://127.0.0.1:3210/onebot/events`，选择 **array** 消息格式，使用 Unusual 中的事件上报令牌。若桥接器使用不同的签名密钥，在 Unusual 设置中填写同一密钥。保存并测试，再导入群或添加好友。好友列表、语音和 QQ 空间扩展取决于桥接器实现。 [NapCat 上游](https://github.com/NapNeko/NapCatQQ)
 

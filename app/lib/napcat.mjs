@@ -6,8 +6,8 @@ import { token } from './config.mjs';
 
 // Only these fixed local NapCat operations are reachable; no general proxy.
 export class NapCat {
-  constructor(store, { fetchImpl = fetch, now = Date.now } = {}) {
-    this.store = store; this.fetch = fetchImpl; this.now = now;
+  constructor(store, { fetchImpl = fetch, now = Date.now, basePort=3210 } = {}) {
+    this.basePort=basePort; this.apiUrl="http://127.0.0.1:"+(basePort+2); this.store = store; this.fetch = fetchImpl; this.now = now;
     this.credential = ''; this.expires = 0; this.cache = null; this.pending = null; this.synced = '';
   }
   managed() {
@@ -17,8 +17,8 @@ export class NapCat {
   desiredConfig() {
     const o = this.store.config.onebot;
     return { network: {
-      httpServers: [{ name:'qiliao',enable:true,port:3212,host:'127.0.0.1',enableCors:false,enableWebsocket:false,messagePostFormat:'array',token:o.accessToken,debug:false }],
-      httpClients: [{ name:'qiliao-events',enable:true,url:'http://127.0.0.1:3210/onebot/events',messagePostFormat:'array',reportSelfMessage:false,token:o.webhookToken,debug:false }],
+      httpServers: [{ name:'qiliao',enable:true,port:this.basePort+2,host:'127.0.0.1',enableCors:false,enableWebsocket:false,messagePostFormat:'array',token:o.accessToken,debug:false }],
+      httpClients: [{ name:'qiliao-events',enable:true,url:'http://127.0.0.1:'+this.basePort+'/onebot/events',messagePostFormat:'array',reportSelfMessage:false,token:o.webhookToken,debug:false }],
       httpSseServers:[],websocketServers:[],websocketClients:[],plugins:[]
     }, musicSignUrl:'',enableLocalFile2Url:false,parseMultMsg:false,imageDownloadProxy:'' };
   }
@@ -26,19 +26,19 @@ export class NapCat {
     const p = this.store.paths;
     for (const dir of ['data/napcat/config','data/napcat/cache','data/napcat/logs','data/napcat/plugins','data/qq','data/bridge-profile','data/temp']) p.ensureDir(dir);
     const current = this.managed(), config = this.store.config;
-    if (!current || config.onebot.baseUrl !== 'http://127.0.0.1:3212' || !config.onebot.accessToken) config.onebot.accessToken = token();
-    config.onebot.baseUrl = 'http://127.0.0.1:3212';
+    if (!current || config.onebot.baseUrl !== this.apiUrl || !config.onebot.accessToken) config.onebot.accessToken = token();
+    config.onebot.baseUrl = this.apiUrl;
     this.store.saveConfig(config);
     let web = {};
     try { web = JSON.parse(fs.readFileSync(p.resolve('data/napcat/config/webui.json'), 'utf8')); } catch (e) { if (e.code !== 'ENOENT') throw e; }
     const webToken = current?.webToken || token();
-    p.writeJson('data/napcat/config/webui.json', { ...web, host:'127.0.0.1',port:3211,token:webToken,loginRate:20,autoLoginAccount:web.autoLoginAccount || '',disableWebUI:false,accessControlMode:'whitelist',ipWhitelist:['127.0.0.1','::1'],enableXForwardedFor:false,enable2FA:false });
+    p.writeJson('data/napcat/config/webui.json', { ...web, host:'127.0.0.1',port:this.basePort+1,token:webToken,loginRate:20,autoLoginAccount:web.autoLoginAccount || '',disableWebUI:false,accessControlMode:'whitelist',ipWhitelist:['127.0.0.1','::1'],enableXForwardedFor:false,enable2FA:false });
     p.writeJson('data/napcat/config/onebot11.json', this.desiredConfig());
     p.writeJson('data/napcat-managed.json', { version:1,enabled:true,webToken });
     this.expires = 0; this.invalidate(); return { ok:true };
   }
   async unbind({isRunning}={}) {
-    const probe=()=>new Promise((resolve,reject)=>{const socket=net.createConnection({host:'127.0.0.1',port:3211});socket.setTimeout(1500);socket.once('connect',()=>{socket.destroy();resolve(true);});socket.once('error',e=>{socket.destroy();if(e.code==='ECONNREFUSED')resolve(false);else reject(new Error('无法确认 QQ 进程状态，请先彻底退出后重试'));});socket.once('timeout',()=>{socket.destroy();reject(new Error('QQ 组件状态检测超时'));});});
+    const probe=()=>new Promise((resolve,reject)=>{const socket=net.createConnection({host:'127.0.0.1',port:this.basePort+1});socket.setTimeout(1500);socket.once('connect',()=>{socket.destroy();resolve(true);});socket.once('error',e=>{socket.destroy();if(e.code==='ECONNREFUSED')resolve(false);else reject(new Error('无法确认 QQ 进程状态，请先彻底退出后重试'));});socket.once('timeout',()=>{socket.destroy();reject(new Error('QQ 组件状态检测超时'));});});
     if(await (isRunning||probe)())throw new Error('请先断开 QQ，再解绑登录状态');
     this.unbinding=true;
     try {
@@ -58,7 +58,7 @@ export class NapCat {
   setAutoStart(enabled) { const m=this.managed();if(m)this.store.paths.writeJson('data/napcat-managed.json',{...m,enabled:!!enabled}); }
   invalidate() { this.cache = null; this.synced = ''; }
   async raw(route, payload, credential = '') {
-    const response = await this.fetch('http://127.0.0.1:3211/api/' + route, {
+    const response = await this.fetch('http://127.0.0.1:'+(this.basePort+1)+'/api/' + route, {
       method:'POST',headers:{'Content-Type':'application/json',...(credential ? {Authorization:'Bearer ' + credential} : {})},
       body:JSON.stringify(payload),redirect:'error',signal:AbortSignal.timeout(5000)
     });
@@ -96,7 +96,7 @@ export class NapCat {
       if(s.isLogin) {
         info=await this.call('QQLogin/GetQQLoginInfo');
         const desired=this.desiredConfig(), fingerprint=JSON.stringify(desired);
-        if(this.synced!==fingerprint && this.store.config.onebot.baseUrl==='http://127.0.0.1:3212') {
+        if(this.synced!==fingerprint && this.store.config.onebot.baseUrl===this.apiUrl) {
           try { await this.call('OB11Config/SetConfig',{config:JSON.stringify(desired)}); this.synced=fingerprint; }
           catch { setupError='QQ 已登录，自动连线尚未完成，请稍后刷新。'; }
         }

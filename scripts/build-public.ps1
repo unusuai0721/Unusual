@@ -39,7 +39,7 @@ try {
     Copy-Item -LiteralPath $payload -Destination $zip
     & $csc /nologo /codepage:65001 /target:winexe /platform:x64 /reference:System.Web.Extensions.dll /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll "/resource:$payload,unusual-payload.zip" "/win32icon:$icon" "/out:$setup" (Join-Path $source 'desktop\installer.cs')
     if($LASTEXITCODE -ne 0){throw 'Installer compilation failed'}
-    $checks = foreach ($asset in @($zip,$setup)) {
+    $checks = foreach ($asset in (@($zip,$setup) + @(Get-ChildItem -LiteralPath $out -Filter 'Unusual-NapCat-4.18.42-Windows-x64.zip' -File | Select-Object -ExpandProperty FullName))) {
         $hash=(Get-FileHash -LiteralPath $asset -Algorithm SHA256).Hash.ToLowerInvariant()
         "$hash  $([IO.Path]::GetFileName($asset))"
     }

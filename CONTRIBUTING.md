@@ -34,3 +34,7 @@ node scripts/import-memes.mjs "C:\your-files\memes.db"
 下次启动时导入至本机数据库。数据的权利信息见上游 NOTICE；也可以直接在应用中逐条创建自己的词条。 [对应版本源码](https://github.com/thawline/dsh-memewiki/tree/15c3c34149dfb0d5ea3a9b3a4b4f0d7f91318e91)
 
 报告问题时请附版本号、重现步骤和脱敏后的错误信息。不要提交应用 `data/`、密钥、QQ 登录资料或他人的聊天记录。
+
+### 可选 NapCat 组件
+
+Windows 上可用 Python 3.11 或更新版本运行 `python scripts/build-napcat-component.py NapCat.Shell.Windows.Node.zip Unusual-NapCat-4.18.42-Windows-x64.zip`。脚本只接受已固定摘要的 v4.18.42 归档，并核对产物哈希。组件 ZIP 放到发行输出目录后再运行 Windows 打包脚本，校验清单会一并包含它。

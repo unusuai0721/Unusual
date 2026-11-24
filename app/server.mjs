@@ -43,7 +43,7 @@ export async function createApp({ root = ROOT, port = 3210, adapterOverrides, of
   const memeWiki=new MemeWiki(store);
   const voiceLibrary=new VoiceLibrary(store,providers);
   const engine = new Engine(store, { memeWiki, adapters: providers, media, canSend: group => group?.channel==='official'?official.canSend(group):bridge.connected });
-  const napcat = new NapCat(store);
+  const napcat = new NapCat(store,{basePort:port===4210?4210:3210});
   const official = new OfficialQQ(store,{...officialOptions,onEvent:(event,parsed)=>engine.receive(event,parsed)});
   providers.sendOfficial=(group,segments,guard)=>official.sendGroup(group,segments,guard);
   const adminToken = token(), sessionToken = token(), started = Date.now();
@@ -302,7 +302,7 @@ export async function createApp({ root = ROOT, port = 3210, adapterOverrides, of
       monitorJob=checkBridge().catch(()=>{}).finally(()=>{monitorJob=null;});
       return;
     }
-    if (store.configView.onebot.baseUrl !== 'http://127.0.0.1:3212') return;
+    if (store.configView.onebot.baseUrl !== napcat.apiUrl) return;
     monitorJob = (async () => {
       const q = await napcat.status();
       if (!q.isLogin) bridge = { ...bridge, connected:false };
