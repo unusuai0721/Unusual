@@ -784,6 +784,7 @@ test('100% group replies to other people are limited to light reactions without 
   const f=fixture(t,c=>{
     c.voice.enabled=true;
     c.groups[0].voiceMode='always';
+    c.groups[0].reactionStyle='allow';
     c.groups[0].replyProbability=1;
   });
   const member={groupId:'123',source:'qq',role:'user',status:'received',senderId:'888',senderName:'桃子',messageId:'98',content:'有人吗'};
@@ -795,7 +796,7 @@ test('100% group replies to other people are limited to light reactions without 
   f.engine.random=()=>0;
   await f.engine.receive(event('','other-quote',{message:[{type:'reply',data:{id:'98'}},{type:'text',data:{text:'你吃了没'}}]}));
   await settle(f.engine);
-  assert.deepEqual(f.calls.send[1].params.message,[{type:'text',data:{text:'？'}}]);
+  assert.deepEqual(f.calls.send[1].params.message,[{type:'text',data:{text:'(・ω・)'}}]);
   f.engine.random=()=>0.9;
   await f.engine.receive(event('桃子，去不去','other-name'));
   await settle(f.engine);
@@ -847,7 +848,7 @@ test('a member can ask a follow-up after the bot mentions them; unrelated chat d
   await f.engine.receive(event('你觉得呢','interrupted'));
   await settle(f.engine);
   assert.equal(f.calls.generate.length,4);
-  assert.deepEqual(f.calls.send[3].params.message,[{type:'text',data:{text:'(｡･ω･｡)'}}]);
+  assert.equal(f.calls.send.length,2);
   assert.ok(f.calls.generate[1].messages.some(m=>m.content.includes('此前你明确对当前发言者')));
 });
 test('context determines target and whether to reply without requiring at, quote or a pronoun',async t=>{
@@ -865,12 +866,12 @@ test('context determines target and whether to reply without requiring at, quote
   assert.ok(f.calls.generate[0].messages.some(m=>m.content.includes('周六九点')));
   assert.equal(f.calls.send[0].params.message[0].data.text,'末班是十点半。');
 
-  for(const [index,output] of ['[对象:自己][回应:轻]','[对象:他人][回应:正文]\n我替他答','没有标签的误接话'].entries()){
-    response=output;
-    await f.engine.receive(event('知道了','light-'+index,{user_id:'888'}));
-    await settle(f.engine);
-    assert.deepEqual(f.calls.send[index+1].params.message,[{type:'text',data:{text:'(｡･ω･｡)'}}]);
-  }
+  response='[对象:他人][回应:正文]\n我替他答';
+  await f.engine.receive(event('知道了','third-person',{user_id:'888'}));await settle(f.engine);
+  assert.equal(f.calls.send.length,1);
+  response='可以，我来试试';
+  await f.engine.receive(event('试一下','plain-body',{user_id:'888'}));await settle(f.engine);
+  assert.equal(f.calls.send.at(-1).params.message[0].data.text,response);
 });
 test('private plain group greeting and authorized group listing work without false inability',async t=>{const f=privateFixture(t);await f.engine.receive(friendEvent('那你去123这个群说话','relayplain'));await settle(f.engine);assert.equal(f.calls.send[0].action,'send_group_msg');const n=f.calls.generate.length;await f.engine.receive(friendEvent('你现在自己查查有哪些群可以去','relaylist'));await settle(f.engine);assert.equal(f.calls.generate.length,n);assert.match(f.calls.send.at(-1).params.message[0].data.text,/123/);});
 
@@ -883,3 +884,29 @@ test('voice decisions report exact TTS instructions and distinguish fallback fro
 test('explicit style preference is learned with evidence even without triggering a reply',async t=>{const f=fixture(t);await f.engine.receive(event('你以后说话能不能可爱点','style-no-reply'));await settle(f.engine);assert.equal(f.calls.generate.length,0);const state=f.engine.learning.get('default');assert.equal(state.text,'说话可爱一点。');assert.equal(state.sources[state.text].messageId,'style-no-reply');assert.equal(state.sources[state.text].senderId,'777');});
 
 test('private relay collects group member and body across separate user messages',async t=>{const f=privateFixture(t);const base=f.adapters.onebotCall;f.adapters.onebotCall=async(c,a,p)=>a==='get_group_member_list'?[{user_id:456,nickname:'小桃'}]:base(c,a,p);await f.engine.receive(friendEvent('去测试群那个群@小桃','rp1'));await settle(f.engine);await f.engine.receive(friendEvent('123','rp2'));await settle(f.engine);await f.engine.receive(friendEvent('说你好','rp3'));await settle(f.engine);assert.equal(f.calls.generate.length,0);assert.ok(f.calls.send.some(c=>c.action==='send_group_msg'&&c.params.group_id==='123'&&c.params.message.some(m=>m.type==='text'&&m.data.text==='你好')));});
+
+test('vocative keyword and uninterrupted performance request both get normal replies',async t=>{
+  const f=fixture(t,c=>Object.assign(c.groups[0],{replyProbability:1,keywords:['大肥鱼'],autoEmoji:false}));
+  await f.engine.receive(event('大肥鱼出来','call'));await settle(f.engine);
+  await f.engine.receive(event('表演个才艺','request'));await settle(f.engine);
+  assert.equal(f.calls.send.length,2);
+  assert.ok(f.calls.generate.every(i=>i.system.includes('本条已确认')));
+});
+test('reaction-only ignores judgement and attachment odds and uses no model',async t=>{
+  const f=fixture(t,c=>Object.assign(c.groups[0],{turnCheckEnabled:false,turnCheckPercent:0,replyProbability:0,emojiProbability:0,reactionStyle:'only'}));
+  await f.engine.receive(event('','explicit',{message:[{type:'at',data:{qq:'900'}}]}));await settle(f.engine);
+  assert.equal(f.calls.generate.length,0);assert.equal(f.calls.send[0].params.message[0].type,'image');
+});
+test('independent reaction is possible even with zero attachment probability',async t=>{
+  const f=fixture(t,c=>Object.assign(c.groups[0],{turnCheckEnabled:false,emojiProbability:0,reactionStyle:'allow'}));
+  f.adapters.generate=async()=>({text:'[轻回应]',inputTokens:3,outputTokens:2});
+  await f.engine.receive(event());await settle(f.engine);
+  assert.equal(f.calls.send[0].params.message[0].type,'image');
+});
+test('zero contextual sampling keeps normal body and does not reply for an explicitly addressed third party',async t=>{
+  const f=fixture(t,c=>Object.assign(c.groups[0],{turnCheckEnabled:true,turnCheckPercent:0,replyProbability:1}));
+  await f.engine.receive(event('还有别的吗','amb'));await settle(f.engine);
+  assert.doesNotMatch(f.calls.generate[0].system,/单独输出\[旁观\]/);
+  await f.engine.receive(event('','other',{message:[{type:'at',data:{qq:'888'}},{type:'text',data:{text:'帮我看看'}}]}));await settle(f.engine);
+  assert.equal(f.calls.send.length,1);
+});

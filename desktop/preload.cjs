@@ -1,5 +1,10 @@
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('qiliaoDesktop', Object.freeze({
+  checkUpdate: () => ipcRenderer.invoke('update:check'),
+  downloadUpdate: () => ipcRenderer.invoke('update:download'),
+  updateStatus: () => ipcRenderer.invoke('update:status'),
+  applyUpdate: () => ipcRenderer.invoke('update:apply'),
+  showUpdate: () => ipcRenderer.invoke('update:folder'),
   startQQ: () => ipcRenderer.invoke('qq:start'),
   unbindQQ: () => ipcRenderer.invoke('qq:unbind'),
   stopQQ: () => ipcRenderer.invoke('qq:stop'),

@@ -1,4 +1,4 @@
-import {groupTurnTarget, GROUP_REPLY_PROMPT, CONTEXTUAL_TURN_PROMPT, parseContextualTurn, isReactionOnly, KAOMOJI, NEUTRAL_SIGNS, usesLightReactions} from './group-turn.mjs';
+import {groupTurnTarget, GROUP_REPLY_PROMPT, CONTEXTUAL_TURN_PROMPT, parseContextualTurn, isReactionOnly, KAOMOJI, usesLightReactions} from './group-turn.mjs';
 import {mentionIds, mentionRoster} from './mention-targets.mjs';
 import {personaInjection} from './persona-injection.mjs';
 import {PlasticMemory,persistentVoice,stripMemory} from './plastic-memory.mjs';
@@ -186,6 +186,10 @@ export class Engine {
       for(const entry of this.personality.visible(personaId,groupId)){
         if(entry.subject===senderId&&entry.text.startsWith('对你的称呼：'))aliases.push(entry.text.slice('对你的称呼：'.length));
       }
+      for(const keyword of group.keywords||[]){
+        if(keyword.length>=2&&keyword.length<=20&&parsed.content.trim().startsWith(keyword)&&
+          /^(?:出来|在吗|在么|来一下|帮我|回答|你[好在]|[，,:：])/.test(parsed.content.trim().slice(keyword.length)))aliases.push(keyword);
+      }
       turnAliases=[...new Set(aliases.filter(Boolean))].slice(0,8).map(name=>String(name).slice(0,40));
       turnTarget=groupTurnTarget({
         text:parsed.content,targets,selfIds,mentioned:explicitlyMentioned,quoted,quotedId,aliases,
@@ -194,9 +198,13 @@ export class Engine {
       const labels={mention:'明确 @ 本账号',quote:'引用本账号',name:'明确称呼本账号',continuation:'可能接续本账号刚才的发言，需结合话题判断',other:'指向其他群友',ambient:'结合近期上下文判断'};
       this._trace(groupId,'turn_target',labels[turnTarget],parsed.messageId);
     }
+    const continuation=turnTarget==='continuation'&&/(?:[?？]|吗|么|怎么|为什么|几点|多少|能不能|会不会|^(?:那|再|帮我|说句|来个|表演|发个|发句|给我))/.test(parsed.content);
+    const checkPercent=group.turnCheckPercent??100;
+    const checkContext=turnTaking&&!continuation&&['ambient','continuation'].includes(turnTarget)&&
+      (checkPercent>=100||(checkPercent>0&&this.random()*100<checkPercent));
     const focus={
-      at:new Date(now).toISOString(),scopeName:group.name,groupId,
-      directAddress:turnTaking?['mention','quote','name'].includes(turnTarget):directAddress,
+      checkContext,at:new Date(now).toISOString(),scopeName:group.name,groupId,
+      directAddress:turnTaking?(['mention','quote','name'].includes(turnTarget)||continuation):directAddress,
       otherTarget:turnTaking?turnTarget==='other':otherTarget||!!(quotedId&&quoted?.role!=='assistant'&&!parsed.mentioned),
       turnTarget,turnAliases,turnAnchor:turnTarget==='continuation'?state.lastDirectedTurn.rowId:null,content:String(parsed.content||''),contextContent:content,
       messageId:String(parsed.messageId||''),senderId,senderName:parsed.senderName,mentioned:parsed.mentioned,
@@ -215,7 +223,7 @@ export class Engine {
     const reason = this._ineligible(group);
     if (reason && reason !== 'cooldown') { this._trace(groupId,'skipped',reason,parsed.messageId);this._decision(groupId,reason); return { accepted: true, reason }; }
     if(personaId&&!focus.otherTarget&&(!turnTaking||focus.directAddress)){const pid=group.personaId||this.config.defaultPersonaId;this.personality.learn(pid,groupId,senderId,parsed.content,null,focus);const ticket=this.learning.begin(pid,parsed.content,focus);if(ticket.explicit)this.learning.finish(pid,ticket,null);}
-    const triggered = /^\/(?:可变人设|可变人格)$/.test(parsed.content.replace(/^@\d+\s*/,'').trim()) || this._shouldReply(group, parsed);
+    const triggered = /^\/(?:可变人设|可变人格)$/.test(parsed.content.replace(/^@\d+\s*/,'').trim()) || this._shouldReply(group, parsed, focus);
     const pending = this.pending.get(groupId);
     if (!triggered && !pending) { this._trace(groupId,'skipped','not_triggered',parsed.messageId);this._decision(groupId,'not_triggered'); return { accepted: true, reason: 'not_triggered' }; }
     const cancel=!focus.otherTarget&&focus.voice?.negative&&pending?.focus?.senderId===senderId;
@@ -365,12 +373,13 @@ export class Engine {
     }
   }
 
-  _shouldReply(group, parsed) {
+  _shouldReply(group, parsed, focus) {
     if(isPrivate(group.id)&&(!group.replyMode||['all','mention'].includes(group.replyMode)))return true;
     const mentioned = parsed.mentioned && group.mentionReply !== false;
     const mode = group.replyMode || 'smart';
     if (mentioned) return true;
-    if(usesLightReactions(group))return !!String(parsed.content||'').trim();
+    if(usesLightReactions(group)&&mode==='smart'&&focus?.directAddress&&!parsed.mentioned)return true;
+    if(usesLightReactions(group)&&mode==='smart'&&Number(group.replyProbability)>=1)return !!String(parsed.content||'').trim();
     if((parsed.segments||[]).some(s=>s.type==='at'&&s.data.qq!=='all'&&String(s.data.qq)!==String(parsed.selfId)))return false;
     if (!String(parsed.content || '').trim()) return false;
     if (mode === 'mention') return false;
@@ -466,10 +475,13 @@ export class Engine {
         return sent;
       }
       const turnTaking=usesLightReactions(group)&&!!focus?.turnTarget;
-      const contextual=turnTaking&&!focus.directAddress;
-      if(turnTaking&&(focus.otherTarget||(contextual&&isReactionOnly(focus.content)))){
-        return this._sendLightReaction(group,guard,focus.otherTarget?'消息指向其他群友':'本条只有表情或符号');
-      }
+      const contextual=turnTaking&&focus.checkContext;
+      if(!isPrivate(groupId)&&group.reactionStyle==='only')
+        return this._sendLightReaction(group,guard,'按本群设置，只回复表情包或颜文字');
+      if(turnTaking&&focus.otherTarget)
+        return this._observe(group,guard,'消息指向其他群友');
+      if(contextual&&isReactionOnly(focus.content)&&group.reactionStyle==='allow')
+        return this._sendLightReaction(group,guard,'本条只有表情或符号');
       const rememberDirect=()=>{
         if(personaId)this.personality.learn(personaId,groupId,String(focus.senderId),focus.content,null,focus);
         const preference=persistentVoice(focus.content);
@@ -499,6 +511,7 @@ export class Engine {
       let result=local&&!contextual?{...local,usage:{inputTokens:0,outputTokens:0,totalTokens:0},sources:[]}
         :await this._generate({groupId,personaId:group.personaId,providerId:group.providerId,
           message,appendMessage:false,allowEmoji:!!group.autoEmoji,kind:'reply',guard,image,focus});
+      if(result.observe)return this._observe(group,guard,result.observe);
       if(result.lightReaction)return this._sendLightReaction(group,guard,result.lightReaction);
       if(local&&contextual)result={...result,...local,emoji:undefined};
       try {
@@ -508,12 +521,19 @@ export class Engine {
     });
   }
 
+  _observe(group,guard,reason) {
+    if(group.reactionStyle==='allow')return this._sendLightReaction(group,guard,reason);
+    this._trace(group.id,'turn_skip',reason+' · 保持安静');
+    this._decision(group.id,'observing',reason);
+    return {ok:true,status:'observing'};
+  }
+
   async _sendLightReaction(group,guard,reason) {
     const emojis=group.channel!=='official'&&group.autoEmoji!==false&&this.media.emojiSegment?await this._emojiList():[];
     const pick=items=>items[Math.floor(this.random()*items.length)];
     const roll=this.random();
-    const kind=roll<0.1?'符号':emojis.length&&roll>=0.5?'表情包':'颜文字';
-    const text=kind==='颜文字'?pick(KAOMOJI):kind==='符号'?pick(NEUTRAL_SIGNS):'';
+    const kind=emojis.length&&roll>=0.5?'表情包':'颜文字';
+    const text=kind==='颜文字'?pick(KAOMOJI):'';
     const emoji=kind==='表情包'?pick(emojis)?.name:undefined;
     this._trace(group.id,'light_reaction',reason+' · '+kind);
     try{
@@ -639,7 +659,7 @@ export class Engine {
     const memeHit=memeChoice?{query:memeChoice.title,row:memeChoice}:memeFollowUp?{query:memeFollowUp.query,row:memeFollowUp.row}:this.memeWiki?.prefetch(memeText);
     const activeGroup=['reply','proactive'].includes(kind)?this._group(groupId):null;
     const turnTaking=kind==='reply'&&usesLightReactions(activeGroup)&&!!focus?.turnTarget;
-    const contextual=turnTaking&&!focus.directAddress;
+    const contextual=turnTaking&&focus.checkContext;
     const memeTool=!!(!contextual&&memeSettings?.enabled&&this.memeWiki.hasEntries()&&memeSettings.modelLookup&&!memeFollowUp&&!memeHit);
     const memeToolCost=memeTool?MEME_TOOL_BYTES:0;
     maxInputTokens-=memeToolCost;
@@ -649,6 +669,11 @@ export class Engine {
     if(contextual)system+=CONTEXTUAL_TURN_PROMPT+'\n你的群内称呼：'+JSON.stringify(focus.turnAliases||[]);
     else if(turnTaking)system+=GROUP_REPLY_PROMPT;
     if(!image&&!turnTaking)system+='\n先判断发言对象：@或引用第三方表示在和第三方说话；未点名时结合上下文判断，不把每个“你”当成自己。旁观接话必须用第三者视角，不替别人承认、辩解或承接关系。';
+    if(focus?.textRepair)system+='\n上一轮只给了表情或没有正文。这次请用一句具体的话回答当前消息。';
+    const groupReply=kind==='reply'&&activeGroup&&!isPrivate(groupId);
+    if(groupReply)system+=activeGroup.reactionStyle==='allow'
+      ?'\n有实质问题先作答。若一个表情就足以回应，可单独输出[轻回应]。'
+      :'\n对提出的问题或请求给一句有内容的回答；可以另配表情。';
     if(focus?.otherTarget)system+='\n当前消息明确指向其他群友；你是旁观者。';
     if(isPrivate(groupId)&&activeGroup?.relayTargets?.length)system+='\n支持授权群转达；可用固定命令“去群号 @成员QQ 说：正文”或“去群号 艾特昵称说句话”。不声称不能在群里说话；目标不明确时询问群号。';
     const personalityText=persona.id&&this.personality.render(persona.id,groupId,String(focus?.senderId||''));
@@ -747,7 +772,7 @@ export class Engine {
       || (row.role === 'assistant' && ['sent', 'generated'].includes(row.status)));
     const candidates = history.map(row => ({ role: row.role,
       content: row.role === 'user' && row.source === 'qq' && row.senderName
-        ? `[QQ=${row.senderId} 昵称=${JSON.stringify(String(row.senderName).slice(0,40))} 消息=${row.messageId||'未知'}] ${row.content}` : (contextual&&row.id===focus.turnAnchor?'[此前你明确对当前发言者发出的消息] ':'')+String(row.content || '') }));
+        ? `[QQ=${row.senderId} 昵称=${JSON.stringify(String(row.senderName).slice(0,40))} 消息=${row.messageId||'未知'}] ${row.content}` : (turnTaking&&row.id===focus.turnAnchor?'[此前你明确对当前发言者发出的消息] ':'')+String(row.content || '') }));
     if(focus&&history.at(-1)?.messageId!==focus.messageId)candidates.push({role:'user',content:'[当前优先回应 QQ='+focus.senderId+' 昵称='+JSON.stringify(String(focus.senderName||focus.senderId).slice(0,40))+' 消息='+focus.messageId+'] '+(focus.contextContent||message)});
     else if (appendMessage) candidates.push({ role: 'user', content: message });
     if (!candidates.length) candidates.push({ role: 'user', content: message });
@@ -828,12 +853,14 @@ export class Engine {
       }
       const turn=contextual?parseContextualTurn(result.text):null;
       if(turn){
-        this._trace(groupId,'turn_context','上下文判断对象：'+turn.target+'，'+(turn.reply?'回复正文':'轻回应'));
-        if(!turn.reply)return {lightReaction:'上下文判断对象：'+turn.target+'，无需正文'};
+        this._trace(groupId,'turn_context','上下文判断对象：'+turn.target+'，'+(turn.reply?'回复正文':'旁观'));
+        if(!turn.reply)return {observe:'上下文判断对象：'+turn.target};
       }
       const generatedText=turn?.text??(turnTaking?String(result.text||'').replace(/\[群聊[:：](?:正常|轻回应)\]|\[对象[:：](?:自己|他人|不明)\]|\[回应[:：](?:正文|轻)\]/g,''):result.text);
+      const allowSingle=groupReply&&activeGroup.reactionStyle==='allow';
+      if(allowSingle&&/^\s*\[轻回应\]\s*$/.test(generatedText))return {lightReaction:'模型选择独立表情'};
       const picked = [];
-      const memoryOutput=stripMemory(generatedText);const learningOutput=stripLearning(memoryOutput.text);const raw=learningOutput.text;const voiceTag=raw.match(/\[语音[:：]([^\]\r\n]{1,200})\]/);
+      const memoryOutput=stripMemory(String(generatedText||'').replace(/\[轻回应\]|\[旁观\]/g,''));const learningOutput=stripLearning(memoryOutput.text);const raw=learningOutput.text;const voiceTag=raw.match(/\[语音[:：]([^\]\r\n]{1,200})\]/);
       const legacyVoice=/(?:[（(]语音[）)]|\[语音\])/.test(raw);
       const explicitVoice=explicitRequest.requested||!!(focus?.senderId&&this.store.getMeta('voice:preference:'+groupId+':'+focus.senderId,false));
       const voiceIntent=voiceEnabled&&!explicitRequest.negative&&(!!voiceTag||legacyVoice||explicitVoice);
@@ -844,7 +871,16 @@ export class Engine {
         return '';
       }));
       text = text.slice(0, 16000);
-      if(contextual&&!text&&!picked.length&&!interaction.poke&&!interaction.mention)return {lightReaction:'没有生成可接的话'};
+      if(groupReply&&!allowSingle&&!requestedEmoji&&!interaction.poke&&!interaction.mention&&!voiceIntent&&(isReactionOnly(text)||(!text&&(picked.length||turn?.target==='自己'||turn?.target==='不明'||/\[轻回应\]|\[表情[:：]/.test(generatedText))))){
+        if(!focus?.textRepair){
+          this._trace(groupId,'reply_repair','模型只给出表情或空正文，补一次文字回答');
+          this.reservedTokens-=reservation;reservation=0;
+          const next=await this._generate({groupId,personaId,providerId,message,appendMessage,allowEmoji:false,search:false,kind,guard,image,focus:{...focus,checkContext:false,textRepair:true}});
+          next.usage={inputTokens:usage.inputTokens+next.usage.inputTokens,outputTokens:usage.outputTokens+next.usage.outputTokens,totalTokens:usage.totalTokens+next.usage.totalTokens,estimated:usage.estimated||next.usage.estimated};
+          return next;
+        }
+        text='你想让我具体说哪一部分？';picked.length=0;
+      }
       if(voiceEnabled&&explicitVoice&&/(?:没有|没那|没这|不支持|不能|不会).{0,8}(?:语音|发声)|语音.{0,8}(?:没那功能|不支持)|^(?:不发[，,。]|发什么语音)/.test(text))text='我在，你想听我说什么？';
       if(emojiWanted&&(!voiceIntent||requestedEmoji)&&!picked.length&&allowedEmoji.length){const ranked=await this._emojiList(text+' '+message);picked.push(ranked.find(e=>allowedEmoji.includes(e.name))?.name||allowedEmoji[0]);}
       if(!text){this.store.log('warn','model_body_empty',JSON.stringify({groupId,kind,rawCharacters:raw.length,voiceMarker:!!voiceTag||legacyVoice,explicitVoice,outputTokens:usage.outputTokens}));

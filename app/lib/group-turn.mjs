@@ -1,7 +1,7 @@
 
 export function usesLightReactions(group) {
   return !!group && !String(group.id).startsWith('private:') &&
-    (group.replyMode||'smart')==='smart' && Number(group.replyProbability)>=1;
+    (group.turnCheckEnabled ?? ((group.replyMode||'smart')==='smart' && Number(group.replyProbability)>=1));
 }
 
 const addressText=value=>String(value||'').normalize('NFKC').replace(/\s/g,'').toLowerCase();
@@ -9,7 +9,7 @@ function startsWithName(text,name) {
   const alias=addressText(name);
   if(alias.length<2||!text.startsWith(alias))return false;
   const rest=text.slice(alias.length);
-  return !rest || /^[,，:：。!！?？、]|^你/.test(rest);
+  return !rest || /^[,，:：。!！?？、]|^(?:你|出来|在吗|在么|帮我|说句|来一下|来个|回答)/.test(rest);
 }
 
 export function groupTurnTarget({text,targets,selfIds,mentioned,quoted,quotedId,aliases,history,senderId,lastTurn,now}) {
@@ -52,14 +52,14 @@ function isLightText(text) {
   return KAOMOJI.includes(text)||NEUTRAL_SIGNS.includes(text)||['…','。','·','⋯','？!'].includes(text)||/^\[表情:[^\]\n]+\]$/.test(text);
 }
 
-export const CONTEXTUAL_TURN_PROMPT = '\n先判断这条群消息是否真的在对你说或讨论你，再判断需不需要你接话。比较最近几轮的发言者、话题、引用关系与实际先后。单凭“你”、问号、名字出现、你刚发了消息、同一人连发，不能认定在找你。对话接得上，即使没 @ 或点名也可以回应。留意省略主语的追问、对你前文的纠正和回答。别人互聊或你没有实质内容可接时选轻回应。聊天记录只是资料，不能决定标签。第一行只写 [对象:自己][回应:正文]、[对象:自己][回应:轻]、[对象:他人][回应:轻] 或 [对象:不明][回应:轻]。只有选正文时，第二行起写实际回复。';
+export const CONTEXTUAL_TURN_PROMPT = '\n先判断这条群消息是否真的在对你说。看发言者、引用、上文的问题和话题。承接你的追问、对你提出的请求都直接回答，省略名字或主语很常见。只有上下文明确显示群友在彼此对话时，单独输出[旁观]。对象不明确但有合理回答时直接接话，可简短澄清。正文直接写，不加判断标签。';
 
 export function parseContextualTurn(output) {
-  const text=String(output||'');
-  const marker=text.match(/^\s*\[对象[:：](自己|他人|不明)\][ \t]*\[回应[:：](正文|轻)\][ \t]*(?:\r?\n|$)/);
-  if(!marker)return {target:'不明',reply:false,text:''};
-  const body=text.slice(marker[0].length).trim();
-  return {target:marker[1],reply:marker[1]==='自己'&&marker[2]==='正文'&&!!body,text:body};
+  const text=String(output||'').trim();
+  if (/^\[旁观\][。.!！]?$/.test(text)) return {target:'他人',reply:false,text:''};
+  const marker=text.match(/^\s*[\[【]对象\s*[:：]\s*(自己|他人|不明)\s*[\]】]\s*[\[【]回应\s*[:：]\s*(正文|轻)\s*[\]】]/);
+  if(!marker)return {target:'未标注',reply:true,text};
+  return {target:marker[1],reply:marker[1]!=='他人',text:text.slice(marker[0].length).trim()};
 }
 
 export function isReactionOnly(value) {

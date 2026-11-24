@@ -27,7 +27,23 @@ let qqOperation=Promise.resolve();
 function qqAction(fn){const job=qqOperation.catch(()=>{}).then(fn);qqOperation=job;return job;}
 async function unbindQQ(){await stopQQ(true);const r=await api('/api/qq/unbind',{confirm:'UNBIND'},60000);return r.json();}
 function trusted(event){if(!win||event.sender!==win.webContents||event.senderFrame!==win.webContents.mainFrame||new URL(event.senderFrame.url).origin!==ORIGIN)throw new Error('无效窗口');}
-function setupIPC(){for(const [name,fn] of Object.entries({'qq:start':()=>qqAction(startQQ),'qq:stop':()=>qqAction(()=>stopQQ(true)),'qq:unbind':()=>qqAction(unbindQQ),'desktop:status':()=>({desktop:true,qqRunning:!!qq&&qq.exitCode===null,qqStarting,qqError,backendReady:serverReady,version:app.getVersion(),memoryMB:Math.round(app.getAppMetrics().reduce((sum,p)=>sum+p.memory.workingSetSize,0)/1024)}),'desktop:quit':()=>{app.quit();return {ok:true};}}))ipcMain.handle(name,(event)=>{trusted(event);return fn();});}
+const updater=require('../app/lib/release-update.cjs').createUpdater({version:require('../package.json').version,own,dir,fetchImpl:(url,opts)=>require('electron').net.fetch(url,opts)});
+function setupIPC(){
+  let installing=false;
+  async function applyUpdate(){
+    if(installing)return;
+    if(fs.existsSync(own('.git')))throw Error('源码目录请通过 Git 更新。');
+    installing=true;
+    try{
+      const file=await updater.verifiedInstaller();
+      const installer=spawn(file,['--apply-update',ROOT,String(process.pid)],{cwd:ROOT,detached:true,stdio:'ignore',windowsHide:true});
+      await new Promise((resolve,reject)=>{installer.once('spawn',resolve);installer.once('error',reject);});
+      installer.unref();app.quit();
+    }catch(e){installing=false;throw e;}
+  }
+  const updateActions={apply:applyUpdate,check:updater.check,download:updater.download,status:updater.status,folder:async()=>{const file=updater.status().file;if(file&&fs.existsSync(file))require('electron').shell.showItemInFolder(file);}};
+  for(const [action,fn] of Object.entries(updateActions))ipcMain.handle('update:'+action,event=>{trusted(event);return fn();});
+for(const [name,fn] of Object.entries({'qq:start':()=>qqAction(startQQ),'qq:stop':()=>qqAction(()=>stopQQ(true)),'qq:unbind':()=>qqAction(unbindQQ),'desktop:status':()=>({desktop:true,qqRunning:!!qq&&qq.exitCode===null,qqStarting,qqError,backendReady:serverReady,version:app.getVersion(),memoryMB:Math.round(app.getAppMetrics().reduce((sum,p)=>sum+p.memory.workingSetSize,0)/1024)}),'desktop:quit':()=>{app.quit();return {ok:true};}}))ipcMain.handle(name,(event)=>{trusted(event);return fn();});}
 function show(){if(!win||win.isDestroyed()||quitting)return;win.show();if(win.isMinimized())win.restore();win.focus();}
 async function createWindow(url){win=new BrowserWindow({title:'Unusual',icon:own('desktop/icon.ico'),width:1280,height:860,minWidth:950,minHeight:660,show:false,backgroundColor:'#f7f8f5',autoHideMenuBar:true,webPreferences:{preload:own('desktop/preload.cjs'),nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,backgroundThrottling:true,spellcheck:false}});Menu.setApplicationMenu(null);win.webContents.session.setPermissionRequestHandler((_w,_p,cb)=>cb(false));win.webContents.session.setPermissionCheckHandler(()=>false);win.webContents.session.on('will-download',event=>event.preventDefault());win.webContents.setWindowOpenHandler(({url})=>{try{const u=new URL(url);if(u.protocol==='https:'&&!u.username&&!u.password)require('electron').shell.openExternal(u.href);}catch{}return {action:'deny'};});win.webContents.on('will-navigate',(e,url)=>{if(new URL(url).origin!==ORIGIN)e.preventDefault();});win.webContents.on('will-attach-webview',event=>event.preventDefault());win.on('close',e=>{if(!quitting){e.preventDefault();win.hide();}});win.once('ready-to-show',show);win.webContents.on('render-process-gone',()=>{if(!quitting)dialog.showErrorBox('Unusual窗口异常','请通过托盘退出，再重新打开。聊天数据仍保存在软件目录。');});await win.loadURL(url);
 tray=new Tray(nativeImage.createFromPath(own('desktop/icon.ico')));tray.setToolTip('Unusual · 双击打开，右键退出');tray.setContextMenu(Menu.buildFromTemplate([{label:'打开Unusual',click:show},{label:'退出（停止 QQ 和自动聊天）',click:()=>app.quit()}]));tray.on('double-click',show);
