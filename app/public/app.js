@@ -496,7 +496,7 @@ let importingNapCat=false;
 function qqCardContent(){
   const q=S.qq||{},d=S.desktop||{},installed=d.component?.installed,running=d.qqRunning;
   const title=panelHead('2 · 连接 QQ','个人 QQ 使用 NapCat 扫码。官方机器人在设置中连接。',badge(q.isLogin?'QQ 已登录':S.status.bridge?.connected?'桥接已连接':running?'等待扫码':'尚未连接',q.isLogin?'':'gray'));
-  const zipUrl='https://github.com/unusuai0721/Unusual/releases/download/v1.0.2/Unusual-NapCat-4.18.42-Windows-x64.zip';
+  const zipUrl='https://github.com/unusuai0721/Unusual/releases/download/v1.0.3/Unusual-NapCat-4.18.42-Windows-x64.zip';
   const pending=importingNapCat||d.component?.progress;
   const drop='<div class="dropzone" id="napcat-drop">'+icon('upload')+'<div><h3>'+esc(pending?(d.component?.progress||'正在导入组件…'):'将 NapCat 组件 ZIP 拖到这里')+'</h3><p>首次导入会联网补齐约 118 MB 运行文件，然后显示登录二维码。</p><a href="'+zipUrl+'" target="_blank" rel="noreferrer">下载 NapCat 组件 ZIP</a></div>'+button('选择 ZIP','napcat-pick','plus','secondary',pending?'disabled':'')+'<input id="napcat-file" type="file" accept=".zip" hidden></div>';
   const qr=q.hasQr&&running&&!q.isLogin?'<img width="204" height="204" src="/api/qq/qrcode?v='+encodeURIComponent(q.qrVersion)+'" alt="使用手机 QQ 扫码登录">':'<div class="qr-placeholder">'+icon(q.isLogin?'check':'users')+'<strong>'+(q.isLogin?'QQ 已连接':running?'正在准备二维码…':'组件已安装')+'</strong></div>';

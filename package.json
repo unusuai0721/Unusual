@@ -1,6 +1,6 @@
 {
   "name": "unusual-local-qq",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": true,
   "type": "module",
   "description": "Portable local QQ chat companion with no model computer tools",

@@ -37,7 +37,18 @@ async function startQQ(){
     return {ok:true};
   }finally{qqStarting=false;}
 }
-async function stopQQ(persist=false){if(qq&&qq.exitCode===null&&qq.signalCode===null){const exited=new Promise(r=>qq.once('exit',r));qq.kill();await Promise.race([exited,sleep(5000)]);if(qq.exitCode===null&&qq.signalCode===null)throw new Error('QQ 组件尚未退出，请稍后重试解绑');}qq=null;if(serverReady)await api('/api/qq/stopped',{persist});return {ok:true};}
+async function stopQQ(persist=false){
+  const proc=qq;
+  if(proc&&proc.exitCode===null&&proc.signalCode===null){
+    const exited=new Promise(resolve=>proc.once('exit',resolve));
+    proc.kill();
+    await Promise.race([exited,sleep(5000)]);
+    if(proc.exitCode===null&&proc.signalCode===null)throw Error('QQ 组件尚未退出，请稍后重试');
+  }
+  if(qq===proc)qq=null;
+  if(serverReady)await api('/api/qq/stopped',{persist});
+  return {ok:true};
+}
 let qqOperation=Promise.resolve();
 function qqAction(fn){const job=qqOperation.catch(()=>{}).then(fn);qqOperation=job;return job;}
 async function unbindQQ(){await stopQQ(true);const r=await api('/api/qq/unbind',{confirm:'UNBIND'},60000);return r.json();}

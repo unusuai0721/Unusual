@@ -56,7 +56,7 @@ Unusual 是一个在 Windows 上运行的 QQ 聊天助手。它可按会话接�
 
 ### 个人 QQ 扫码登录（Windows x64）
 
-1. 从 [v1.0.2 发布页](https://github.com/unusuai0721/Unusual/releases/tag/v1.0.2) 同时下载 Unusual 和 **Unusual-NapCat-4.18.42-Windows-x64.zip**。
+1. 从 [v1.0.3 发布页](https://github.com/unusuai0721/Unusual/releases/tag/v1.0.3) 同时下载 Unusual 和 **Unusual-NapCat-4.18.42-Windows-x64.zip**。
 2. 打开「快速开始 → 连接 QQ」，将组件 ZIP 原样拖入虚线框，也可以点「选择 ZIP」。Unusual 会校验压缩包，首次联网下载并校验约 118 MB 的 Windows 运行文件，再自动启动 NapCat。使用手机 QQ 扫描窗口中的二维码，确认登录后点「选择聊天的群」。
 3. 已有相同版本完整 `NapCat.Shell.Windows.Node.zip` 的用户可以直接拖入进行离线安装。已安装的组件位于应用的 `components/`，登录资料在 `data/`。应用更新保留两者。断开会保留登录，解绑会清除本软件的账号登录资料。
 
